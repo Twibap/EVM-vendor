@@ -45,6 +45,13 @@ db.once('open', ()=>{
 });
 mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
 
+/* ====== Bootpay Setting ===================== */
+var BootpayRest = require('./node_modules/restler/lib/bootpay.js');
+BootpayRest.setConfig(
+	"5bddbed2b6d49c480275bab3",
+	"zqtTvbfj+sc2l/W52f+C6E8AAp8IAd8BGg1b406sNaI="
+);
+
 /* ====== Middleware ========================= */
 //app.use( express.static( path.resolve(__dirname, "public") ) );
 
@@ -67,15 +74,59 @@ app.post('/order/askN', (request, response)=>{
 
 	console.log( colors.info( order.toJSON() ) );
 
-	// TODO 주문번호 반환
+	// 주문번호 반환
 	response.end( JSON.stringify(order) );
 
 });
 
-app.post('/order/finalize', (request, response)=>{
-	// TODO 결제 검증 
-	// TODO Ether Vending Contract에 전송 Tx 발행
-	// TODO Tx Hash 반환
+// 결제정보 검증단계
+// Client가 전송한 결제 정보가 정상이면 Ether를 송금한다.
+app.post('/order/payment', (request, response)=>{
+	// 결제 검증 
+	var bill = mkBill( request.body);
+	console.log( JSON.stringify( bill ) );
+
+	BootpayRest.getAccessToken().then(function (response) {
+		// Access Token을 발급 받았을 때
+		if (response.status === 200 && response.data.token !== undefined) {
+
+			return BootpayRest.verify( bill.receipt_id );
+		}
+	}).then(function (_response) {
+		//console.log(_response);
+
+		// 검증 결과를 제대로 가져왔을 때
+		if (_response.status === 200) {
+			// 원래 주문했던 금액이 일치하는가?
+			// 그리고 결제 상태가 완료 상태인가?
+			if (_response.data.price == bill.price && _response.data.status === 1) {
+				// 인증 정보 저장 및 order_id 업데이트
+				bill.unit = _response.data.unit;
+				bill.save((error)=>{if(error!=null) console.error; return;});
+				Order
+					.updateOne(
+						{_id: bill.order_id}, 
+						{bill_id: bill._id},
+						(error, resultFromDB)=>{
+							if (error) return handleError(error);
+							console.log( colors.info("Payment Ok") );
+							console.log( colors.info( resultFromDB ) );
+							Order.findById(bill.order_id).exec(
+								(error, order)=>{
+									if (error) return handleError(error);
+									console.log( colors.info( order ) );
+								}
+							);
+						}
+					);
+
+				// TODO Ether Vending Contract에 전송 Tx 발행
+				// TODO Tx Hash 반환
+				response.end( "result : "+ true);
+
+			}
+		}
+	});
 });
 
 // 404 Error
@@ -108,7 +159,28 @@ var mkOrder = (data)=>{
 	order.price_id = data.price_id;
 	order.bill_id = null;
 
-	order.set('toJSON', { getters:true, virtuals: false })
+	order.set('toJSON', { getters:true, virtuals: false });
 
 	return order;
 }
+
+var Bill = require('./models/bill');
+var mkBill = (data)=>{
+	var bill = new Bill();
+
+  bill.receipt_id = data.receipt_id;
+  bill.order_id = data.order_id;
+  bill.price = data.price;
+  bill.name = data.item_name;
+  bill.pg = data.pg;
+  bill.method = data.method;
+  bill.requested_at = data.requested_at;
+  bill.purchased_at = data.purchased_at;
+  bill.status = data.status;
+
+	bill.set('toJSON', {getters:true, virtuals: false});
+
+	return bill;
+}
+
+// 결제 정보 검증을 위한 단계

@@ -6,7 +6,7 @@ var ObjectId = Schema.Types.ObjectId;
 var orderSchema = new Schema({
 
 	address: String,
-	amount: String,
+	amount: Number,
 	price_id: ObjectId,
 	bill_id: { type : ObjectId, default : null } 
 
