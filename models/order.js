@@ -8,6 +8,7 @@ var orderSchema = new Schema({
 	address: String,
 	amount: Number,
 	price_id: ObjectId,
+	ordered_at: { type: Date, default: Date.now },
 	bill_id: { type : ObjectId, default : null } 
 
 }, { versionKey: false});
