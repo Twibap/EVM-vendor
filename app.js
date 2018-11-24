@@ -24,6 +24,16 @@ colors.setTheme({
   error: 'red'
 });
 
+/* ====== Web3.js Setting ==================== */
+const fs = require("fs");
+const Web3 = require("web3");
+
+let web3 = new Web3(Web3.givenProvider || "ws://localhost:9545");
+let source = fs.readFileSync("Vendor.json");
+let abi = JSON.parse( source ).abi;
+
+let contract = new web3.eth.Contract(abi, '0xE28386438574c4726Cd4cC259BDc33F8D60F0aaf');
+
 /* ====== HTTP Setting ======================= */
 var express = require("express");
 var path = require("path");
@@ -60,8 +70,11 @@ app.use(logger("dev"));
 
 app.use( bodyparser.urlencoded( { extended : true} ) );
 
-app.post('/order/askN', (request, response)=>{
+app.post('/order/askN', async(request, response)=>{
 	// TODO 잔고 확인
+	console.log("Contract Address - "+ contract.options.address);
+	let balance = await web3.eth.getBalance( contract.options.address );
+	console.log( "Balance - "+ balance);
 	
 	// 주문내용 저장
 	var order = mkOrder(request.body);
@@ -121,12 +134,23 @@ app.post('/order/payment', (request, response)=>{
 					);
 
 				// TODO Ether Vending Contract에 전송 Tx 발행
+				
 				// TODO Tx Hash 반환
 				response.end( "result : "+ true);
 
 			}
 		}
 	});
+});
+
+app.get('/address/toChecksum/:address', (request, response)=>{
+	let checksumAddress = toChecksumAddress( request.params.address );
+	console.log(checksumAddress);
+	response.json( checksumAddress );
+});
+
+app.get('/address/isValid/:address', (request, response)=>{
+	response.json( isValidAddress( request.params.address ) );
 });
 
 // 404 Error
@@ -150,6 +174,8 @@ http.createServer(app).listen(3000, ()=>{
 });
 
 /* ====== Functions =========================== */
+
+// ====== Order data Schema =========================
 var Order = require('./models/order')
 var mkOrder = (data)=>{
 	var order = new Order();
@@ -164,6 +190,7 @@ var mkOrder = (data)=>{
 	return order;
 }
 
+// ====== Payment data Schema =========================
 var Bill = require('./models/bill');
 var mkBill = (data)=>{
 	var bill = new Bill();
@@ -183,4 +210,25 @@ var mkBill = (data)=>{
 	return bill;
 }
 
-// 결제 정보 검증을 위한 단계
+// ====== Address Checksum =========================
+const createKeccakHash = require('keccak')
+function toChecksumAddress (address) {
+  address = address.toLowerCase().replace('0x', '')
+  var hash = createKeccakHash('keccak256').update(address).digest('hex')
+  var ret = '0x'
+
+  for (var i = 0; i < address.length; i++) {
+    if (parseInt(hash[i], 16) >= 8) {
+      ret += address[i].toUpperCase()
+    } else {
+      ret += address[i]
+    }
+  }
+
+  return ret
+}
+
+function isValidAddress( address ){
+	return !address && address === toChecksumAddress( address );
+}
+
