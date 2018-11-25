@@ -72,9 +72,13 @@ app.use( bodyparser.urlencoded( { extended : true} ) );
 
 app.post('/order/askN', async(request, response)=>{
 	// TODO 잔고 확인
+	// 1차. Contract 잔고에 따라 주문 처리
+	// 2차. Contract 잔고와 채굴되지 않은 Tx까지 합산해서 주문 처리 
 	console.log("Contract Address - "+ contract.options.address);
 	let balance = await web3.eth.getBalance( contract.options.address );
 	console.log( "Balance - "+ balance);
+
+	// TODO 주소 유효성 확인
 	
 	// 주문내용 저장
 	var order = mkOrder(request.body);
@@ -144,7 +148,7 @@ app.post('/order/payment', (request, response)=>{
 });
 
 app.get('/address/toChecksum/:address', (request, response)=>{
-	let checksumAddress = toChecksumAddress( request.params.address );
+	let checksumAddress = web3.utils.toChecksumAddress(request.params.address);
 	console.log(checksumAddress);
 	response.json( checksumAddress );
 });
@@ -211,24 +215,8 @@ var mkBill = (data)=>{
 }
 
 // ====== Address Checksum =========================
-const createKeccakHash = require('keccak')
-function toChecksumAddress (address) {
-  address = address.toLowerCase().replace('0x', '')
-  var hash = createKeccakHash('keccak256').update(address).digest('hex')
-  var ret = '0x'
-
-  for (var i = 0; i < address.length; i++) {
-    if (parseInt(hash[i], 16) >= 8) {
-      ret += address[i].toUpperCase()
-    } else {
-      ret += address[i]
-    }
-  }
-
-  return ret
+function isValidAddress(address){
+	return address && 
+		web3.utils.isAddress( address ) && 
+		web3.utils.checkAddressChecksum( address );
 }
-
-function isValidAddress( address ){
-	return !address && address === toChecksumAddress( address );
-}
-
