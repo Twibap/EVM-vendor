@@ -17,6 +17,18 @@ let contract = new web3.eth.Contract(abi, '0xE28386438574c4726Cd4cC259BDc33F8D60
 /* ====== DB Setting ========================= */
 const transaction = require('../app_modules/schema/transaction.js');
 
+var mongoose = require("mongoose");
+var db = mongoose.connection;
+var dbUrl = 'mongodb://localhost/';
+var dbName = 'EVM';
+
+mongoose.Promise = global.Promise;
+db.on('error', console.error);
+db.once('open', ()=>{
+	console.log( colors.info("Database is connected") );
+});
+mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
+
 /* ====== Bootpay Setting ===================== */
 const BootpayRest = require('../node_modules/restler/lib/bootpay.js');
 const Confidential = require("../confidential.js");
@@ -25,30 +37,44 @@ BootpayRest.setConfig(
 	Confidential.Bootpay_Private_Key
 );
 
-router.post('/askN', async(request, response)=>{
+/* ====== Address Utils Setting ===================== */
+const addressUtils = require('../app_modules/function/addressUtils.js');
+
+router.post('/askN', (request, response)=>{
+
+	// 주소 유효성 확인
+	addressUtils.isValidAddress( request.body.address ).then(()=>{
+		return web3.eth.getBalance( contract.options.address );
+	})
 	// TODO 잔고 확인
 	// 1차. Contract 잔고에 따라 주문 처리
-	// 2차. Contract 잔고와 채굴되지 않은 Tx까지 합산해서 주문 처리 
-	console.log("Contract Address - "+ contract.options.address);
-	let balance = await web3.eth.getBalance( contract.options.address );
-	console.log( "Balance - "+ balance);
+	// TODO 2차. Contract 잔고와 채굴되지 않은 Tx까지 합산해서 주문 처리 
+		.then(( contractBalance )=>{
+			console.log("Balance - "+web3.utils.fromWei(contractBalance));
+			if (contractBalance === 0){
+				handleOrderError("Lumberroom is empty");
+				return;
+			}
 
-	// TODO 주소 유효성 확인
-	
+			return getGoodsAmount( 
+				request.body.price_id, 
+				request.body.amount, 
+				contractBalance );
+		})
 	// 주문내용 저장
-	var order = transaction.mkOrder(request.body);
-	order.save((error)=>{
-		if(error){
-			console.log( colors.error(error) );
-			return;
-		}
-	});
-
-	console.log( colors.info( order.toJSON() ) );
-
+		.then((goodsAmount)=>{
+			var order = transaction.mkOrder(request.body);
+			return order.save();
+		})
 	// 주문번호 반환
-	response.end( JSON.stringify(order) );
-
+		.then((savedOrder)=>{
+			console.log( colors.info( savedOrder ) );
+			response.status(202);	// Accepted 
+			response.end( JSON.stringify( savedOrder ) );
+		})
+		.catch((error)=>{
+			handleOrderError( error, request, response ) ;
+		});
 });
 
 // 결제정보 검증단계
@@ -104,5 +130,34 @@ router.post('/payment', (request, response)=>{
 		}
 	});
 });
+
+let requireFromUrl = require('require-from-url/sync');
+let Price = requireFromUrl(
+	'https://raw.githubusercontent.com/Twibap/EVM-priceboard/master/models/price.js');
+function getGoodsAmount(price_id, payment_price, balance){
+	return new Promise((resolve, reject)=>{
+		Price.findById( price_id ).exec(
+			(error, price)=>{
+				if(error) reject( Error(error) );
+
+				// 이더 갯수 = 결재가격 / 이더 가격
+				let ether_price = price.trade_price;
+				let goodsAmount = payment_price / ether_price;
+				console.log("Goods Amount  - "+goodsAmount);
+
+				if( goodsAmount >= balance )
+					reject( Error("Not Enough") );
+				else
+					resolve(goodsAmount);
+			});
+	});
+}
+
+function handleOrderError( err, req, res ){
+	console.log( colors.error(err.message) );
+	console.log( colors.error(req.body) );
+	// 412 Precondition Failed
+	res.status(412).send( err.toString() );
+}
 
 module.exports = router;

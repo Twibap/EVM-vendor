@@ -19,19 +19,6 @@ var http = require("http");
 var bodyparser = require("body-parser");
 
 var app = express();
-
-/* ====== DB Setting ========================= */
-var mongoose = require("mongoose");
-var db = mongoose.connection;
-var dbUrl = 'mongodb://localhost/';
-var dbName = 'EVM';
-
-db.on('error', console.error);
-db.once('open', ()=>{
-	console.log( colors.info("Database is connected") );
-});
-mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
-
 /* ====== Middleware ========================= */
 //app.use( express.static( path.resolve(__dirname, "public") ) );
 
