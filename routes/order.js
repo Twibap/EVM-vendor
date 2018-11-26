@@ -16,6 +16,7 @@ let contract = new web3.eth.Contract(abi, '0xE28386438574c4726Cd4cC259BDc33F8D60
 
 /* ====== DB Setting ========================= */
 const transaction = require('../app_modules/schema/transaction.js');
+const price = require('../app_modules/schema/price.js');
 
 var mongoose = require("mongoose");
 var db = mongoose.connection;
@@ -56,7 +57,7 @@ router.post('/askN', (request, response)=>{
 				return;
 			}
 
-			return getGoodsAmount( 
+			return price.getGoodsAmount( 
 				request.body.price_id, 
 				request.body.amount, 
 				contractBalance );
@@ -130,28 +131,6 @@ router.post('/payment', (request, response)=>{
 		}
 	});
 });
-
-let requireFromUrl = require('require-from-url/sync');
-let Price = requireFromUrl(
-	'https://raw.githubusercontent.com/Twibap/EVM-priceboard/master/models/price.js');
-function getGoodsAmount(price_id, payment_price, balance){
-	return new Promise((resolve, reject)=>{
-		Price.findById( price_id ).exec(
-			(error, price)=>{
-				if(error) reject( Error(error) );
-
-				// 이더 갯수 = 결재가격 / 이더 가격
-				let ether_price = price.trade_price;
-				let goodsAmount = payment_price / ether_price;
-				console.log("Goods Amount  - "+goodsAmount);
-
-				if( goodsAmount >= balance )
-					reject( Error("Not Enough") );
-				else
-					resolve(goodsAmount);
-			});
-	});
-}
 
 function handleOrderError( err, req, res ){
 	console.log( colors.error(err.message) );
