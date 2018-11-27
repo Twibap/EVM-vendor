@@ -2,11 +2,12 @@
 
 // ====== Order data Schema =========================
 var Order = require('../../models/order')
-var mkOrder = (data)=>{
+var mkOrder = (data, amount_ether)=>{
 	var order = new Order();
 
 	order.address = data.address;
-	order.amount = data.amount;
+	order.amount_ether = amount_ether;
+	order.amount_payment = data.amount;
 	order.price_id = data.price_id;
 	order.bill_id = null;
 

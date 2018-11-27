@@ -13,6 +13,7 @@ let source = fs.readFileSync("Vendor.json");
 let abi = JSON.parse( source ).abi;
 
 let contract = new web3.eth.Contract(abi, '0xE28386438574c4726Cd4cC259BDc33F8D60F0aaf');
+contract.options.from = web3.eth.accounts[0];
 
 /* ====== DB Setting ========================= */
 const transaction = require('../app_modules/schema/transaction.js');
@@ -57,14 +58,15 @@ router.post('/askN', (request, response)=>{
 				return;
 			}
 
+			// Ether 판매량 계산
 			return price.getGoodsAmount( 
 				request.body.price_id, 
 				request.body.amount, 
 				contractBalance );
 		})
 	// 주문내용 저장
-		.then((goodsAmount)=>{
-			var order = transaction.mkOrder(request.body);
+		.then((goodsAmount)=>{	// goodsAmount is BN
+			var order = transaction.mkOrder(request.body, goodsAmount);
 			return order.save();
 		})
 	// 주문번호 반환
@@ -121,17 +123,50 @@ router.post('/payment', (request, response)=>{
 		console.log( colors.info( updatedOrder ) );	
 
 		// TODO Ether Vending Contract에 전송 Tx 발행
-		return new Promise((resolve, reject)=>{
-			resolve();
-		});
-	}).then(()=>{
+		return sendGoods(updatedOrder);
+	}).then((receipt)=>{
+		console.log("Final Receipt - "+receipt)
 		// TODO Tx Hash 반환
 		response.end( "result : "+ true);
+
+		return web3.eth.getBalance( contract.options.address );
+	}).then((balance)=>{
+		console.log("After contract Balance - "+ web3.utils.fromWei(balance));
 	}).catch((error)=>{
+		console.log( error );
 		response.status(500);
 		response.end( error.toString() );
 	});
 });
+
+function sendGoods(order){
+	if( order.bill_id == null){
+		var errorMsg = "Payment not confirmed";
+		console.log( colors.error( errorMsg ) );
+		throw new Error( errorMsg );
+	}
+
+	let goods = order.amount_ether;
+	let buyer = order.address;
+
+	//let payload = contract.sendGoods.getData( buyer, goods);
+
+	// return receipt with Promise 
+	return contract.methods.sendGoods(buyer, goods).send({from: "0x5383aba85a5502af4d1544547cf073fc9dbf5f8c"})
+		.once("transactionHash", (hash)=>{
+			console.log( colors.verbose("Hash - "+hash) );
+		})
+		.once("receipt", (receipt)=>{
+			console.log( colors.verbose("Receipt - "+receipt) );
+		})
+		.on("confirmation", (confNumber, receipt)=>{
+			console.log( colors.verbose("Confirmation Number - "+confNumber) );
+			console.log( colors.verbose("Confirmation Receipt - "+receipt) );
+		})
+		.catch(( error )=>{
+			console.log( error );
+		});
+}
 
 function handleOrderError( err, req, res ){
 	console.log( colors.error(err.message) );

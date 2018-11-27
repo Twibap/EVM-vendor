@@ -6,7 +6,8 @@ var ObjectId = Schema.Types.ObjectId;
 var orderSchema = new Schema({
 
 	address: String,
-	amount: Number,
+	amount_ether: String,		// Wei
+	amount_payment: Number,
 	price_id: ObjectId,
 	ordered_at: { type: Date, default: Date.now },
 	bill_id: { type : ObjectId, default : null } 
