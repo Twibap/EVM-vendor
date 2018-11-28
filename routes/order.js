@@ -1,19 +1,33 @@
 const express = require('express');
 const router = express.Router();
 
+/* ====== Confidential data ====== */
+const Confidential = require("../confidential.js");
+
 /* ====== Log Color Setting ================== */
 const colors = require('../app_modules/log/colors');
 
 /* ====== Web3.js Setting ==================== */
 const fs = require("fs");
 const Web3 = require("web3");
+console.log(Web3.version);
 
-let web3 = new Web3(Web3.givenProvider || "ws://localhost:9545");
+// WebsocketProvider를 사용하는 경우 Promise를 사용할 수 없다.
+// onmessage()에서 모두 처리해야함.
+let web3Provider = "https://ropsten.infura.io/v3/"+Confidential.INFURA_PROJECT_ID;
+let web3 = new Web3( Web3.givenProvider || web3Provider );
+
 let source = fs.readFileSync("Vendor.json");
 let abi = JSON.parse( source ).abi;
 
-let contract = new web3.eth.Contract(abi, '0xE28386438574c4726Cd4cC259BDc33F8D60F0aaf');
+let contract = new web3.eth.Contract(abi, '0x3B2fbeAEA307cFDA5906650d26c6de1fF50E8ebE');
 contract.options.from = web3.eth.accounts[0];
+
+// Address Object 
+let contract_manager = web3.eth.accounts.privateKeyToAccount( Confidential.PRIVATE_KEY );
+
+//console.log( contract );
+console.log( contract_manager );
 
 /* ====== DB Setting ========================= */
 const transaction = require('../app_modules/schema/transaction.js');
@@ -33,7 +47,6 @@ mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
 
 /* ====== Bootpay Setting ===================== */
 const BootpayRest = require('../node_modules/restler/lib/bootpay.js');
-const Confidential = require("../confidential.js");
 BootpayRest.setConfig(
 	Confidential.Bootpay_REST_Application_ID,
 	Confidential.Bootpay_Private_Key
@@ -122,16 +135,29 @@ router.post('/payment', (request, response)=>{
 	}).then((updatedOrder)=>{
 		console.log( colors.info( updatedOrder ) );	
 
-		// TODO Ether Vending Contract에 전송 Tx 발행
-		return sendGoods(updatedOrder);
-	}).then((receipt)=>{
-		console.log("Final Receipt - "+receipt)
-		// TODO Tx Hash 반환
-		response.end( "result : "+ true);
+		// Ether Vending Contract에 전송 Tx 발행
+		// 1. 서명된 Tx를 생성한다.
+		return getTxSendGoods(updatedOrder.address, updatedOrder.amount_ether);
+	}).then((txSendGoods)=>{
+		console.log(txSendGoods);
+		let signedTx = txSendGoods.rawTransaction;
 
-		return web3.eth.getBalance( contract.options.address );
-	}).then((balance)=>{
-		console.log("After contract Balance - "+ web3.utils.fromWei(balance));
+		// 2. 서명된 Tx를 발행한다.
+		return web3.eth.sendSignedTransaction( signedTx )
+			.once('transactionHash',(hash)=>{
+				// Transaction이 발행되면 Tx Hash 값을 Client에게 전달한다.
+				console.log('transactionHash - '+hash);
+				response.json(hash);
+			})
+			.on('error',(error)=>{
+				console.log('on Error - '+error);
+			});
+
+	}).then((receipt)=>{
+		// Transaction이 블록에 포함되면 receipt를 얻는다.
+		// 블록 Hash를 Client에게 전달하여 거래를 완료한다.
+		// TODO FCM 등 다른 수단으로 Ethereum이 전송되었다는 사실을 알린다.
+		console.log('then Recipt - '+colors.verbose(receipt) );
 	}).catch((error)=>{
 		console.log( error );
 		response.status(500);
@@ -152,7 +178,7 @@ function sendGoods(order){
 	//let payload = contract.sendGoods.getData( buyer, goods);
 
 	// return receipt with Promise 
-	return contract.methods.sendGoods(buyer, goods).send({from: "0x5383aba85a5502af4d1544547cf073fc9dbf5f8c"})
+	return contract.methods.sendGoods(buyer, goods).send({from: "0xB4760d454eAEA3FEe39EA0a65DE4c108a3960582"})
 		.once("transactionHash", (hash)=>{
 			console.log( colors.verbose("Hash - "+hash) );
 		})
@@ -165,6 +191,30 @@ function sendGoods(order){
 		})
 		.catch(( error )=>{
 			console.log( error );
+		});
+}
+
+/*
+ *	estimateGas - 35040
+ *	{ messageHash: '0xe79c32fc1649feebc4f2bebe155c9b0872a51786f875b8563c52500a780d4b5a',
+ *		v: '0x29',
+ *		r: '0x7a83ab528fcfbe7f003ccd4860d26009f83b5c6976157bb3a00b484ff1acb5c',
+ *		s: '0x5a0b1ec15862dcb87c7e969b4af7092eb9ef4bf7d5c9a56f7d1e10042da09cdf',
+ *		rawTransaction: '0xf89435843b9aca008288e08080b844e6f1f0ce0000000000000000000000001773ee2ff5bb68962ae57086f949b60a4353ce9b0000000000000000000000000000000000000000000000000bb29fe2f5109cef29a007a83ab528fcfbe7f003ccd4860d26009f83b5c6976157bb3a00b484ff1acb5ca05a0b1ec15862dcb87c7e969b4af7092eb9ef4bf7d5c9a56f7d1e10042da09cdf' }
+	*/
+function getTxSendGoods(buyer, goods){
+	return contract.methods.sendGoods(buyer, goods).estimateGas({from:contract_manager.address})
+		.then((estimateGas)=>{
+			let abi = contract.methods.sendGoods(buyer, goods).encodeABI();
+			let transaction = {
+				to: contract.options.address,
+				data: abi,
+				gas: estimateGas
+			};
+
+			console.log("EstimateGas - "+ estimateGas);
+			console.log("Transaction - "+ JSON.stringify(transaction) );
+			return contract_manager.signTransaction(transaction);
 		});
 }
 
