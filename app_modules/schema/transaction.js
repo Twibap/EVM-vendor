@@ -6,6 +6,7 @@ var mkOrder = (data, amount_ether)=>{
 	var order = new Order();
 
 	order.address = data.address;
+	order.token = data.token;
 	order.amount_ether = amount_ether;
 	order.amount_payment = data.amount;
 	order.price_id = data.price_id;

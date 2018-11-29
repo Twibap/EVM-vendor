@@ -55,6 +55,16 @@ BootpayRest.setConfig(
 /* ====== Address Utils Setting ===================== */
 const addressUtils = require('../app_modules/function/addressUtils.js');
 
+/* ====== Firebase Setting ========================== */
+const firebase = require('firebase-admin');
+const serviceAccount = require('../evm-the-vending-machine-firebase-adminsdk-0vy7i-369c0eb7e2.json');
+
+firebase.initializeApp({
+  credential: firebase.credential.cert(serviceAccount),
+  databaseURL: "https://evm-the-vending-machine.firebaseio.com"
+});
+
+/* ====== Route ===================================== */
 router.post('/askN', (request, response)=>{
 
 	// 주소 유효성 확인
@@ -119,6 +129,7 @@ router.post('/payment', (request, response)=>{
 			}
 		}
 	}).then((savedBill)=>{
+		bill = savedBill;
 
 		// 결제 id를 Order에 저장
 		return transaction.Order.updateOne(
@@ -145,9 +156,19 @@ router.post('/payment', (request, response)=>{
 		// 2. 서명된 Tx를 발행한다.
 		return web3.eth.sendSignedTransaction( signedTx )
 			.once('transactionHash',(hash)=>{
+				// 주문 정보에 Transaction Hash 저장
+				transaction.Order.updateOne(
+					{_id: bill.order_id},
+					{txHash: hash}
+				).exec();
+
 				// Transaction이 발행되면 Tx Hash 값을 Client에게 전달한다.
-				console.log('transactionHash - '+hash);
-				response.json(hash);
+				// TODO Client에서 알람 구현할 것.
+				let responseMsg = {
+					transactionHash: hash
+				};
+				console.log('transactionHash - '+ JSON.stringify(responseMsg) );
+				response.json(responseMsg);
 			})
 			.on('error',(error)=>{
 				console.log('on Error - '+error);
@@ -157,13 +178,59 @@ router.post('/payment', (request, response)=>{
 		// Transaction이 블록에 포함되면 receipt를 얻는다.
 		// 블록 Hash를 Client에게 전달하여 거래를 완료한다.
 		// TODO FCM 등 다른 수단으로 Ethereum이 전송되었다는 사실을 알린다.
-		console.log('then Recipt - '+colors.verbose(receipt) );
+
+		transaction.Order.updateOne(
+			{_id: bill.order_id},
+			{bkHash: receipt.blockHash}
+		).exec();
+
+		console.log('Receipt', colors.verbose(receipt) );
+		return responseReceipt(receipt);
+	}).then((fcmResponse)=>{
+		console.log('Successfully send receipt', fcmResponse);
 	}).catch((error)=>{
 		console.log( error );
 		response.status(500);
 		response.end( error.toString() );
 	});
 });
+
+function responseReceipt(receipt){
+	return transaction.Order
+		.findOne({ txHash: receipt.transactionHash})
+		.then((order)=>{
+			// 저장된 FCM 토큰 조회하기
+			let clientToken = order.token;
+			console.log("Response receipt to "+order);
+
+			// 전송할 메시지 조립하기
+			let txComplete = {
+				bkHash: receipt.blockHash,
+				bkNumber: receipt.blockNumber.toString(),
+				txHash: receipt.transactionHash,
+				txIndex: receipt.transactionIndex.toString()
+			};
+
+			let message = {
+				data: txComplete,
+				android: {
+					priority: 'high',	// or 'normal' 
+					notification: {
+						title: "전송 완료",
+						body: "이더리움 전송이 완료되었습니다.",
+						tag: txComplete.txHash
+					},
+					data: txComplete
+				},
+				token: clientToken
+			}
+			
+			// 전송하기
+			// return message id string with Promise
+			return firebase.messaging().send(message);
+		});
+
+}
 
 function sendGoods(order){
 	if( order.bill_id == null){

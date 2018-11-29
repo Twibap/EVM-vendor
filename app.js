@@ -31,6 +31,8 @@ app.use('/order', require("./routes/order.js"));
 
 app.use('/address', require("./routes/address"));
 
+app.use('/user', require("./routes/user"));
+
 // 404 Error
 app.use((request, response)=>{
 	response.status(404);
