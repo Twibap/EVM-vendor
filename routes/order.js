@@ -160,15 +160,19 @@ router.post('/payment', (request, response)=>{
 				transaction.Order.updateOne(
 					{_id: bill.order_id},
 					{txHash: hash}
-				).exec();
+				).then(()=>{
+					// 알람을 띄우기 위해 txHash를 FCM으로 전달한다.
+					responseTx( hash );
 
-				// Transaction이 발행되면 Tx Hash 값을 Client에게 전달한다.
-				// TODO Client에서 알람 구현할 것.
-				let responseMsg = {
-					transactionHash: hash
-				};
-				console.log('transactionHash - '+ JSON.stringify(responseMsg) );
-				response.json(responseMsg);
+					// Transaction이 발행되면 Tx Hash 값을 Client에게 전달한다.
+					let responseMsg = {
+						transactionHash: hash
+					};
+
+					console.log('transactionHash - '+ JSON.stringify(responseMsg) );
+					response.status(200);
+					response.json(responseMsg);
+				});
 			})
 			.on('error',(error)=>{
 				console.log('on Error - '+error);
@@ -195,6 +199,35 @@ router.post('/payment', (request, response)=>{
 	});
 });
 
+function responseTx( hash ){
+	return transaction.Order
+		.findOne({ txHash: hash})
+		.then((order)=>{
+			// 저장된 FCM 토큰 조회하기
+			let clientToken = order.token;
+			console.log("Response transaction hash \n", hash);
+
+			// 전송할 메시지 조립하기
+			let message = {
+				token: clientToken,
+				android: {
+					priority: 'high',	// or 'normal' 
+					data: {
+						type: "transaction",
+						title: "이더리움 전송 중...",
+						body: "이더리움이 전송 중입니다.\nTransaction이 블록에 포함되면 계좌에 표시됩니다.",
+						txHash: hash,
+					}
+				}
+			}
+			
+			// 전송하기
+			// return message id string with Promise
+			return firebase.messaging().send(message);
+		});
+
+}
+
 function responseReceipt(receipt){
 	return transaction.Order
 		.findOne({ txHash: receipt.transactionHash})
@@ -204,25 +237,20 @@ function responseReceipt(receipt){
 			console.log("Response receipt to "+order);
 
 			// 전송할 메시지 조립하기
-			let txComplete = {
-				bkHash: receipt.blockHash,
-				bkNumber: receipt.blockNumber.toString(),
-				txHash: receipt.transactionHash,
-				txIndex: receipt.transactionIndex.toString()
-			};
-
 			let message = {
-				data: txComplete,
+				token: clientToken,
 				android: {
 					priority: 'high',	// or 'normal' 
-					notification: {
-						title: "전송 완료",
-						body: "이더리움 전송이 완료되었습니다.",
-						tag: txComplete.txHash
-					},
-					data: txComplete
-				},
-				token: clientToken
+					data: {
+						type: "receipt",
+						title: "구입 완료",
+						body: "이더리움이 지갑에 도착했습니다.",
+						bkHash: receipt.blockHash,
+						bkNumber: receipt.blockNumber.toString(),
+						txHash: receipt.transactionHash,
+						txIndex: receipt.transactionIndex.toString()
+					}
+				}
 			}
 			
 			// 전송하기
