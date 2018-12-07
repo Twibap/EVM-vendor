@@ -46,7 +46,8 @@ db.once('open', ()=>{
 mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
 
 /* ====== Bootpay Setting ===================== */
-const BootpayRest = require('../node_modules/restler/lib/bootpay.js');
+const requireFromUrl = require('require-from-url/sync');
+const BootpayRest = requireFromUrl('https://raw.githubusercontent.com/bootpay/server_nodejs/master/lib/bootpay.js');
 BootpayRest.setConfig(
 	Confidential.Bootpay_REST_Application_ID,
 	Confidential.Bootpay_Private_Key
