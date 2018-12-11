@@ -19,6 +19,9 @@ var http = require("http");
 var bodyparser = require("body-parser");
 
 var app = express();
+/* ====== DB Setting ======================= */
+require("./app_modules/database.js");
+
 /* ====== Middleware ========================= */
 //app.use( express.static( path.resolve(__dirname, "public") ) );
 

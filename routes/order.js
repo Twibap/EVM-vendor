@@ -33,18 +33,6 @@ console.log( contract_manager );
 const transaction = require('../app_modules/schema/transaction.js');
 const price = require('../app_modules/schema/price.js');
 
-var mongoose = require("mongoose");
-var db = mongoose.connection;
-var dbUrl = 'mongodb://localhost/';
-var dbName = 'EVM';
-
-mongoose.Promise = global.Promise;
-db.on('error', console.error);
-db.once('open', ()=>{
-	console.log( colors.info("Database is connected") );
-});
-mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
-
 /* ====== Bootpay Setting ===================== */
 const requireFromUrl = require('require-from-url/sync');
 const BootpayRest = requireFromUrl('https://raw.githubusercontent.com/bootpay/server_nodejs/master/lib/bootpay.js');
