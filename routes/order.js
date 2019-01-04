@@ -188,6 +188,66 @@ router.post('/payment', (request, response)=>{
 	});
 });
 
+/**
+ * 구매 내역을 사용자에게 제공하는 기능이다.
+ * 사용자는 이더리움 주소를 전송한다.
+ * 서버는 이더리움 주소에 해당하는 구매 내역을 사용자에게 반환한다.
+ * 
+ * Pagination
+ * 서버는 Page를 따로 계산하지 않는다.
+ * 사용자는 구매내역 조회 요청을 보낼 때 이전에 전송받은 자료 갯수를 함께 전송한다.
+ * 최초 요청시 서버는 구매내역 시간 역순 중 최초 10개만 반환하고
+ */
+router.get('/history/:address/:skip', (request, response)=>{
+	const address = request.params.address;
+	const countForSkip = Number(request.params.skip);
+	const countPerPage = 10;
+	let isLastPage = false;
+
+	transaction.Order.
+		where('address').equals(address).
+		sort({ ordered_at: 'descending'}).
+		countDocuments().
+		exec().	// return Promise
+		then((count)=>{
+			console.log("count "+count);
+			// 요청 자료 범위가 총 자료양을 벗어나면 잘못된 요청 메시지 응답
+			if( count <= countForSkip ){
+				return new Promise((_, reject)=>reject(new Error("Out of Range")));
+			}
+
+			// 요청 자료 범위가 총 자료양의 마지막 구간이면 응답 헤더에 표시한다.
+			if( count <= countForSkip + countPerPage )
+				isLastPage = true;
+
+			response.set("isLastPage",isLastPage);
+			
+			return transaction.Order.
+				find().
+				where('address').equals(address).
+				sort({ ordered_at: 'descending'}).
+				skip( countForSkip ).
+				limit( countPerPage ).
+				exec();
+		}).
+		then((result)=>{
+			if(isLastPage){
+			console.log( colors.info("["+address+"]")+" 구매내역 "+ colors.info(result.length)+"개 조회됨 "+ colors.error("마지막 페이지"));
+			} else {
+			console.log( colors.info("["+address+"]")+" 구매내역 "+ colors.info(result.length)+"개 조회됨");
+			}
+			response.status(200);
+			response.json(result);
+		}).
+		catch((error)=>{
+			console.log( colors.info("["+address+"]")+ colors.error(" 범위 초과 요청") );
+			response.status(204);	// 204(콘텐츠 없음): 요청을 성공적으로 처리했지만 콘텐츠를 제공하지 않는다.
+			response.end();
+		});
+});
+
+
+/* ====== Functions ========================= */
 function responseTx( hash ){
 	return transaction.Order
 		.findOne({ txHash: hash})

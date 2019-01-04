@@ -4,8 +4,8 @@ let colors = require('../app_modules/log/colors');
 /* ====== DB Setting ========================= */
 var mongoose = require("mongoose");
 var db = mongoose.connection;
-//var dbUrl = 'mongodb://localhost/';
-var dbUrl = 'mongodb://172.17.0.2/';
+var dbUrl = 'mongodb://localhost/';
+//var dbUrl = 'mongodb://172.17.0.2/';
 var dbName = 'EVM';
 
 mongoose.Promise = global.Promise;
