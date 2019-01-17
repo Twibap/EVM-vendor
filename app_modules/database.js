@@ -9,7 +9,7 @@ var mongoose = require("mongoose");
 var db = mongoose.connection;
 //var dbUrl = 'mongodb://localhost/';
 var dbUrl = 'mongodb://'+data.DATABASE_URL;
-var dbName = 'EVM';
+var dbName = '/EVM';
 
 mongoose.Promise = global.Promise;
 db.on('error', console.error);

@@ -14,7 +14,7 @@ let getGoodsAmount = function (price_id, payment_price, balance){
 
 				// 이더 갯수(wei) = 결제 가격(원) * wei단위 / 이더 가격(원)
 				// 결제 가격과 이더 가격을 BigNumber로 변환하여 연산.
-				let wei_ether_price = web3.utils.toBN( price.trade_price );	
+				let wei_ether_price = web3.utils.toBN( price.evm_price);	
 				let wei_payment_price = web3.utils.toWei( web3.utils.toBN( payment_price) );	// toWei return type BN
 
 				//let goodsAmount = payment_price / ether_price;

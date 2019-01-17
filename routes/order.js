@@ -58,6 +58,23 @@ router.post('/askN', (request, response)=>{
 
 	// 주소 유효성 확인
 	addressUtils.isValidAddress( request.body.address ).then(()=>{
+		// 주문 횟수 검사하기. 
+		var now = new Date();
+		var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		var tomorrow = new Date( now.getFullYear(), now.getMonth(), now.getDate()+1 );
+		return transaction.Order.
+		//	find({ordered_at: {$gte:today, $lte: tomorrow}}).
+			find().
+			where('address').equals( request.body.address ).
+			where('ordered_at').gt( today ).lt( tomorrow ).
+			where('bill_id').ne(null)	// not equal. 결제 한 것에 한해서
+			exec();
+	}).then(( lastOrders )=>{
+		// 하루 주문 5회 이상일 경우 주문 거절
+		if ( lastOrders.length >= 5 ){
+			throw "Limit exceeded";
+		}
+		
 		return web3.eth.getBalance( contract.options.address );
 	})
 	// TODO 잔고 확인
@@ -66,8 +83,7 @@ router.post('/askN', (request, response)=>{
 		.then(( contractBalance )=>{
 			console.log("Balance - "+web3.utils.fromWei(contractBalance));
 			if (contractBalance === 0){
-				handleOrderError("Lumberroom is empty");
-				return;
+				throw "Ethereum is Empty";
 			}
 
 			// Ether 판매량 계산
@@ -363,7 +379,7 @@ function getTxSendGoods(buyer, goods){
 }
 
 function handleOrderError( err, req, res ){
-	console.log( colors.error(err.message) );
+	console.log( colors.error(err) );
 	console.log( colors.error(req.body) );
 	// 412 Precondition Failed
 	res.status(412).send( err.toString() );
