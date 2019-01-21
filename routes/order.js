@@ -162,10 +162,10 @@ router.post('/payment', (request, response)=>{
 		return web3.eth.sendSignedTransaction( signedTx )
 			.once('transactionHash',(hash)=>{
 				// 주문 정보에 Transaction Hash 저장
-				transaction.Order.updateOne(
+				transaction.Order.update(
 					{_id: bill.order_id},
 					{txHash: hash}
-				).then(()=>{
+				).exec().then(()=>{
 					// 알람을 띄우기 위해 txHash를 FCM으로 전달한다.
 					responseTx( hash );
 
@@ -188,9 +188,9 @@ router.post('/payment', (request, response)=>{
 		// 블록 Hash를 Client에게 전달하여 거래를 완료한다.
 		// TODO FCM 등 다른 수단으로 Ethereum이 전송되었다는 사실을 알린다.
 
-		transaction.Order.updateOne(
+		transaction.Order.update(
 			{_id: bill.order_id},
-			{bkHash: receipt.blockHash}
+			{bkHash: receipt.blockNumber}
 		).exec();
 
 		console.log('Receipt', colors.verbose(receipt) );
