@@ -208,11 +208,7 @@ router.post('/payment', (request, response)=>{
  * 구매 내역을 사용자에게 제공하는 기능이다.
  * 사용자는 이더리움 주소를 전송한다.
  * 서버는 이더리움 주소에 해당하는 구매 내역을 사용자에게 반환한다.
- * 
- * Pagination
- * 서버는 Page를 따로 계산하지 않는다.
- * 사용자는 구매내역 조회 요청을 보낼 때 이전에 전송받은 자료 갯수를 함께 전송한다.
- * 최초 요청시 서버는 구매내역 시간 역순 중 최초 10개만 반환하고
+ * 결제한 기록이 있는 내역만 전송한다.
  */
 router.get('/history/:address/:skip', (request, response)=>{
 	const address = request.params.address;
@@ -222,6 +218,7 @@ router.get('/history/:address/:skip', (request, response)=>{
 
 	transaction.Order.
 		where('address').equals(address).
+		where('bill_id').ne(null).
 		sort({ ordered_at: 'descending'}).
 		countDocuments().
 		exec().	// return Promise
@@ -241,6 +238,7 @@ router.get('/history/:address/:skip', (request, response)=>{
 			return transaction.Order.
 				find().
 				where('address').equals(address).
+				where('bill_id').ne(null).
 				sort({ ordered_at: 'descending'}).
 				skip( countForSkip ).
 				limit( countPerPage ).
@@ -282,6 +280,7 @@ function responseTx( hash ){
 						title: "이더리움 전송 중...",
 						body: "이더리움이 전송 중입니다.\nTransaction이 블록에 포함되면 계좌에 표시됩니다.",
 						txHash: hash,
+						address: order.address
 					}
 				}
 			}
@@ -313,7 +312,8 @@ function responseReceipt(receipt){
 						bkHash: receipt.blockHash,
 						bkNumber: receipt.blockNumber.toString(),
 						txHash: receipt.transactionHash,
-						txIndex: receipt.transactionIndex.toString()
+						txIndex: receipt.transactionIndex.toString(),
+						address: order.address
 					}
 				}
 			}
