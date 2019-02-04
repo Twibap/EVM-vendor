@@ -30,6 +30,12 @@ app.use(logger("dev"));
 
 app.use( bodyparser.urlencoded( { extended : true} ) );
 
+app.get('/app/download', (req, res, next)=>{
+	var filePath = "/usr/src/app/release/android";
+	var fileName = "/app-release.apk";
+	res.download(filePath + fileName);
+});
+
 app.use('/order', require("./routes/order.js"));
 
 app.use('/address', require("./routes/address"));
