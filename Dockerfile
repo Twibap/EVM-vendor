@@ -15,5 +15,5 @@ COPY . .
 EXPOSE 8080
 
 # 앱 실행
-# docker run -e DATABASE_URL=127.0.0.1 -e DATABASE_PORT=27017 --name evm-vendor -p 3000:3000 -v ~/release:/usr/src/release -d twibap/evm-vendor
+# docker run -e DATABASE_URL=127.0.0.1 -e DATABASE_PORT=27017 --name evm-vendor -p 3000:3000 -v ~/release:/usr/src/app/release -d twibap/evm-vendor
 CMD node app.js -d $DATABASE_URL -p $DATABASE_PORT
