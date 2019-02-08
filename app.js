@@ -32,7 +32,7 @@ app.use( bodyparser.urlencoded( { extended : true} ) );
 
 app.get('/app/download', (req, res, next)=>{
 	var filePath = "/usr/src/app/release/android";
-	var fileName = "/app-release.apk";
+	var fileName = "/EthereumVendingMachine.apk";
 	res.download(filePath + fileName);
 });
 
